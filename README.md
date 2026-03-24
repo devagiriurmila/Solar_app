@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Smart Solar Energy Monitoring & Prediction System
 ## Powered by Temporal Fusion Transformer (TFT)
 
@@ -114,3 +115,6 @@ solar-app/
 - Weather data comes from **Open-Meteo** — completely free, no API key needed.
 - The SQLite database auto-creates at `backend/solar_data.db`.
 - For production, swap SQLite with PostgreSQL (change the `get_db()` function).
+=======
+# Solar_app
+>>>>>>> cf92497b9b602ce0ec5258f69740d2b13ac7c960
