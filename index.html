@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Solar Energy Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0f1117;
+      --surface: #161b2e;
+      --card:    #1e2440;
+      --border:  #2a3055;
+      --accent:  #f5a623;
+      --blue:    #4fc3f7;
+      --green:   #66bb6a;
+      --red:     #ef5350;
+      --purple:  #ab47bc;
+      --text:    #e0e6ff;
+      --muted:   #7b88b5;
+      --radius:  12px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; font-size: 14px; min-height: 100vh; }
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 24px; }
+    .logo-text { font-size: 16px; font-weight: 600; color: var(--accent); }
+    .logo-sub  { font-size: 11px; color: var(--muted); }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    #api-status { font-size: 12px; padding: 4px 12px; border-radius: 20px; background: #2a1a1a; color: var(--red); border: 1px solid #4a2a2a; font-weight: 600; }
+    #api-status.connected { background: #1a2a1a; color: #4caf50; border-color: #2a4a2a; }
+    .api-input { display: flex; align-items: center; gap: 6px; }
+    .api-input label { color: var(--muted); font-size: 12px; }
+    .api-input input { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 8px; font-size: 12px; width: 200px; }
+    .btn { padding: 6px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-secondary { background: var(--card); color: var(--text); border: 1px solid var(--border); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .stat-value { font-size: 26px; font-weight: 700; line-height: 1; }
+    .stat-unit  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 20px; }
+    @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+    .chart-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .chart-card h3 { font-size: 13px; color: var(--muted); margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+    .chart-card h3 span { color: var(--text); font-weight: 600; }
+    canvas { max-height: 240px; }
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .bottom-row { grid-template-columns: 1fr; } }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 11px; color: var(--muted); }
+    .form-group input, .form-group select { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+    .predict-result { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); display: none; }
+    .predict-result.show { display: block; }
+    .pred-main { font-size: 28px; font-weight: 700; color: var(--accent); }
+    .pred-bounds { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .pred-bar { height: 6px; border-radius: 3px; background: var(--border); margin: 8px 0; }
+    .pred-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s; }
+    .pred-conf { font-size: 11px; color: var(--muted); }
+    .weather-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .weather-icon { font-size: 28px; }
+    .weather-main { font-size: 22px; font-weight: 700; }
+    .weather-desc { font-size: 12px; color: var(--muted); }
+    .forecast-scroll { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .forecast-hour { flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; text-align: center; min-width: 64px; }
+    .forecast-hour .fh-time  { font-size: 10px; color: var(--muted); }
+    .forecast-hour .fh-val   { font-size: 15px; font-weight: 600; color: var(--accent); margin: 4px 0; }
+    .forecast-hour .fh-cloud { font-size: 10px; color: var(--muted); }
+    .model-badge { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg,#1a1030,#0d1a30); border: 1px solid #3a2060; border-radius: 20px; padding: 4px 12px; font-size: 11px; color: var(--purple); }
+    .model-badge::before { content: "bolt"; font-family: monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    /* 7-day temperature forecast */
+    .temp7-day-tabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 4px; }
+    .temp7-tab { flex-shrink: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; text-align: center; cursor: pointer; transition: all 0.2s; min-width: 90px; }
+    .temp7-tab:hover, .temp7-tab.active { border-color: var(--blue); background: rgba(79,195,247,0.08); }
+    .temp7-tab .t7-dayname { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+    .temp7-tab .t7-date    { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+    .temp7-tab .t7-range   { font-size: 13px; font-weight: 700; color: var(--blue); }
+    .temp7-tab .t7-hum     { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .temp7-detail { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .temp7-detail h4 { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .temp7-timeline { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+    .temp7-slot { flex-shrink: 0; min-width: 70px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 8px; text-align: center; }
+    .t7s-hour { font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+    .t7s-temp { font-size: 16px; font-weight: 700; color: var(--blue); }
+    .t7s-hum  { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .temp7-chart-wrap { margin-top: 14px; }
+    .temp7-summary { display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+    .temp7-summary b { color: var(--text); }
+    .day-cards { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-top: 10px; }
+    @media (max-width: 900px) { .day-cards { grid-template-columns: repeat(4, 1fr); } }
+    .day-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 10px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+    .day-card:hover, .day-card.active { border-color: var(--accent); background: rgba(245,166,35,0.06); }
+    .day-name  { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .day-date  { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+    .day-kwh   { font-size: 22px; font-weight: 700; color: var(--accent); }
+    .day-unit  { font-size: 11px; color: var(--muted); }
+    .day-meta  { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+    .day-bar   { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; }
+    .day-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.4s; }
+    .sevenday-detail { margin-top: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: none; }
+    .sevenday-detail.show { display: block; }
+    .sevenday-meta { display: flex; gap: 20px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .sevenday-meta b { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-icon">&#9728;&#65039;</span>
+    <div>
+      <div class="logo-text">Smart Solar Monitor</div>
+      <div class="logo-sub">TFT Deep Learning - Real-time Analytics</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="api-input">
+      <label>API URL:</label>
+      <input type="text" id="api-url" value="http://127.0.0.1:8000"/>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="connectAPI()">Connect</button>
+    <span id="api-status">&#9679; Disconnected</span>
+  </div>
+</header>
+
+<main>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Today's Energy</div>
+      <div class="stat-value" id="stat-today" style="color:var(--accent)">--</div>
+      <div class="stat-unit">kWh generated</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Power</div>
+      <div class="stat-value" id="stat-power" style="color:var(--blue)">--</div>
+      <div class="stat-unit">kW average</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Readings</div>
+      <div class="stat-value" id="stat-readings" style="color:var(--green)">--</div>
+      <div class="stat-unit">data points</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">TFT Model R2</div>
+      <div class="stat-value" id="stat-r2" style="color:var(--purple)">--</div>
+      <div class="stat-unit">accuracy score</div>
+      <div style="margin-top:6px"><span class="model-badge">Temporal Fusion Transformer</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Daily Forecast</div>
+      <div class="stat-value" id="stat-forecast" style="color:var(--accent)">--</div>
+      <div class="stat-unit">kWh predicted today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">MAE</div>
+      <div class="stat-value" id="stat-mae" style="color:var(--muted)">--</div>
+      <div class="stat-unit">mean absolute error</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3><span>24-Hour Energy Output</span>
+        <button class="btn btn-secondary btn-sm" onclick="simulateDay()">+ Simulate Day</button>
+      </h3>
+      <canvas id="energyChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3><span>Hourly Forecast (TFT)</span></h3>
+      <canvas id="forecastChart"></canvas>
+    </div>
+  </div>
+
+  <div class="bottom-row">
+    <div class="chart-card">
+      <h3><span>TFT Prediction</span>
+        <span class="model-badge">p10 / p50 / p90</span>
+      </h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Temperature (C)</label>
+          <input type="number" id="p-temp" value="30" min="-10" max="55"/>
+        </div>
+        <div class="form-group">
+          <label>Cloud Cover (%)</label>
+          <input type="number" id="p-cloud" value="20" min="0" max="100"/>
+        </div>
+        <div class="form-group">
+          <label>Irradiance (W/m2)</label>
+          <input type="number" id="p-irrad" value="700" min="0" max="1200"/>
+        </div>
+        <div class="form-group">
+          <label>Hour of Day</label>
+          <input type="number" id="p-hour" value="12" min="0" max="23"/>
+        </div>
+        <div class="form-group">
+          <label>Month</label>
+          <select id="p-month">
+            <option value="1">January</option><option value="2">February</option>
+            <option value="3">March</option><option value="4">April</option>
+            <option value="5">May</option><option value="6">June</option>
+            <option value="7">July</option><option value="8">August</option>
+            <option value="9">September</option><option value="10">October</option>
+            <option value="11">November</option><option value="12">December</option>
+          </select>
+        </div>
+        <div class="form-group" style="justify-content:flex-end">
+          <button class="btn btn-primary" style="margin-top:auto" onclick="runPredict()">
+            Run TFT
+          </button>
+        </div>
+      </div>
+      <div class="predict-result" id="predict-result">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:11px;color:var(--muted)">Predicted Output (p50)</div>
+            <div class="pred-main" id="pred-value">--</div>
+            <div class="pred-bounds" id="pred-bounds">p10: -- | p90: --</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--muted)">Confidence</div>
+            <div style="font-size:20px;font-weight:700;color:var(--green)" id="pred-conf">--</div>
+          </div>
+        </div>
+        <div class="pred-bar"><div class="pred-fill" id="pred-conf-bar" style="width:0%"></div></div>
+        <div class="pred-conf" id="pred-conf-label">--</div>
+      </div>
+    </div>
+
+    <!-- 7-Day Forecast Panel -->
+    <div class="chart-card" style="grid-column: 1 / -1;">
+      <h3>
+        <span>📅 7-Day Solar Forecast <span style="font-size:10px;color:var(--muted);font-weight:400">— based on your historical sensor data</span></span>
+        <button class="btn btn-secondary btn-sm" onclick="load7Day()">Refresh</button>
+      </h3>
+      <div id="sevenday-content">
+        <div style="color:var(--muted);text-align:center;padding:30px 0">Connect to API to load 7-day forecast</div>
+      </div>
+    </div>
+
+    <!-- 7-Day Temperature Forecast Panel -->
+    <div class="chart-card" style="grid-column: 1 / -1; margin-top: 14px;">
+      <h3>
+        <span>🌡 7-Day Temperature &amp; Humidity Forecast
+          <span style="font-size:10px;color:var(--muted);font-weight:400">— TFT model · p10/p50/p90 · calibrated from your sensor data</span>
+        </span>
+        <button class="btn btn-secondary btn-sm" onclick="loadTempForecast()">Refresh</button>
+      </h3>
+      <div id="temp7day-content">
+        <div style="color:var(--muted);text-align:center;padding:30px 0">Connect to API to load temperature forecast</div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3><span>Weather &amp; Solar Forecast</span>
+        <button class="btn btn-secondary btn-sm" onclick="loadWeather()">Refresh</button>
+      </h3>
+      <div id="weather-content">
+        <div style="color:var(--muted);text-align:center;padding:40px 0">
+          Connect to API and click Refresh
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────
+var API = "http://127.0.0.1:8000";
+document.getElementById("api-url").value = API;
+
+var energyChart, forecastChart;
+var isConnected = false;
+
+// ── Helpers ─────────────────────────────────────────────────────
+async function api(path, opts) {
+  opts = opts || {};
+  var headers = {"Content-Type": "application/json"};
+  var res = await fetch(API + path, Object.assign({headers: headers}, opts));
+  if (!res.ok) throw new Error(res.status + " " + res.statusText);
+  return res.json();
+}
+
+function setStatus(ok, msg) {
+  var el = document.getElementById("api-status");
+  el.textContent = "● " + msg;
+  el.className = ok ? "connected" : "";
+  isConnected = ok;
+}
+
+function fmt(v, d) {
+  d = d === undefined ? 2 : d;
+  if (v === null || v === undefined) return "--";
+  return Number(v).toFixed(d);
+}
+
+// ── Connect ─────────────────────────────────────────────────────
+async function connectAPI() {
+  API = document.getElementById("api-url").value.replace(/\/$/, "");
+  setStatus(false, "Connecting...");
+  try {
+    await api("/");
+    setStatus(true, "Connected");
+    await loadMetrics();
+    await loadReadings();
+    await loadWeather();
+    await load7Day();
+    await loadTempForecast();
+  } catch(e) {
+    setStatus(false, "Disconnected - " + e.message);
+    console.error("Connect error:", e);
+  }
+}
+
+// ── Metrics ─────────────────────────────────────────────────────
+async function loadMetrics() {
+  try {
+    var m = await api("/metrics");
+    document.getElementById("stat-today").textContent    = fmt(m.today_energy_kwh);
+    document.getElementById("stat-power").textContent    = fmt(m.average_power_kw);
+    document.getElementById("stat-readings").textContent = m.total_readings;
+    document.getElementById("stat-r2").textContent       = fmt(m.model.r2_score, 4);
+    document.getElementById("stat-mae").textContent      = fmt(m.model.mae_kwh, 4);
+  } catch(e) { console.error("metrics error:", e); }
+}
+
+// ── Readings Chart ───────────────────────────────────────────────
+async function loadReadings() {
+  try {
+    var data = await api("/readings?limit=48");
+    var rows = data.readings.slice().reverse();
+    var labels = rows.map(function(r){ return r.timestamp.slice(11,16); });
+    var actual  = rows.map(function(r){ return r.energy_kwh || 0; });
+    var pred    = rows.map(function(r){ return r.predicted_kwh || null; });
+
+    if (energyChart) energyChart.destroy();
+    var ctx = document.getElementById("energyChart").getContext("2d");
+    energyChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: "Actual (kWh)", data: actual, borderColor: "#f5a623", backgroundColor: "rgba(245,166,35,0.1)", fill: true, tension: 0.4, pointRadius: 2 },
+          { label: "TFT Predicted (kWh)", data: pred, borderColor: "#4fc3f7", borderDash: [4,4], backgroundColor: "transparent", tension: 0.4, pointRadius: 2 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { labels: { color: "#7b88b5", boxWidth: 12 } } },
+        scales: {
+          x: { ticks: { color: "#7b88b5", maxTicksLimit: 8 }, grid: { color: "#2a3055" } },
+          y: { ticks: { color: "#7b88b5" }, grid: { color: "#2a3055" }, title: { display: true, text: "kWh", color: "#7b88b5" } }
+        }
+      }
+    });
+  } catch(e) { console.error("readings error:", e); }
+}
+
+// ── Weather ──────────────────────────────────────────────────────
+async function loadWeather() {
+  var el = document.getElementById("weather-content");
+  el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px 0" class="pulse">Fetching weather...</div>';
+  try {
+    var data = await api("/weather");
+    var cw = data.current_weather || {};
+    var wc = cw.weathercode || 0;
+    var icon = wc === 0 ? "Sunny" : wc < 10 ? "Partly Cloudy" : wc < 30 ? "Cloudy" : wc < 60 ? "Overcast" : "Rainy";
+
+    var forecastHTML = data.forecast
+      .filter(function(f){ return f.irradiance > 0 || (f.hour >= 6 && f.hour <= 20); })
+      .map(function(f){
+        return '<div class="forecast-hour">'
+          + '<div class="fh-time">' + String(f.hour).padStart(2,"0") + ':00</div>'
+          + '<div class="fh-val">' + fmt(f.predicted_kwh, 2) + '</div>'
+          + '<div class="fh-cloud">Cloud ' + fmt(f.cloud_cover, 0) + '%</div>'
+          + '</div>';
+      }).join("");
+
+    el.innerHTML = '<div class="weather-header">'
+      + '<div><div class="weather-main">' + fmt(cw.temperature, 1) + 'C</div>'
+      + '<div class="weather-desc">' + icon + ' | Wind ' + fmt(cw.windspeed, 0) + ' km/h</div></div>'
+      + '<div style="margin-left:auto;text-align:right">'
+      + '<div style="font-size:11px;color:var(--muted)">Daily Predicted</div>'
+      + '<div style="font-size:18px;font-weight:700;color:var(--accent)">' + fmt(data.daily_predicted_kwh) + ' kWh</div>'
+      + '</div></div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Hourly forecast</div>'
+      + '<div class="forecast-scroll">' + forecastHTML + '</div>';
+
+    document.getElementById("stat-forecast").textContent = fmt(data.daily_predicted_kwh);
+
+    // Forecast chart
+    var hours = data.forecast.map(function(f){ return String(f.hour).padStart(2,"0") + ":00"; });
+    var preds = data.forecast.map(function(f){ return f.predicted_kwh; });
+    var irr   = data.forecast.map(function(f){ return f.irradiance / 1000; });
+
+    if (forecastChart) forecastChart.destroy();
+    var ctx2 = document.getElementById("forecastChart").getContext("2d");
+    forecastChart = new Chart(ctx2, {
+      type: "bar",
+      data: {
+        labels: hours,
+        datasets: [
+          { label: "TFT Pred (kWh)", data: preds, backgroundColor: "rgba(245,166,35,0.75)", yAxisID: "y" },
+          { label: "Irradiance (kW/m2)", data: irr, type: "line", borderColor: "#4fc3f7", backgroundColor: "transparent", tension: 0.4, pointRadius: 0, yAxisID: "y1" }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { labels: { color: "#7b88b5", boxWidth: 12 } } },
+        scales: {
+          x: { ticks: { color: "#7b88b5", maxRotation: 0, maxTicksLimit: 8 }, grid: { color: "#2a3055" } },
+          y:  { ticks: { color: "#f5a623" }, grid: { color: "#2a3055" }, position: "left" },
+          y1: { ticks: { color: "#4fc3f7" }, grid: { drawOnChartArea: false }, position: "right" }
+        }
+      }
+    });
+
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);padding:16px">Error: ' + e.message + '</div>';
+    console.error("weather error:", e);
+  }
+}
+
+// ── TFT Predict ──────────────────────────────────────────────────
+async function runPredict() {
+  var body = {
+    temperature: parseFloat(document.getElementById("p-temp").value),
+    cloud_cover: parseFloat(document.getElementById("p-cloud").value),
+    irradiance:  parseFloat(document.getElementById("p-irrad").value),
+    hour_of_day: parseInt(document.getElementById("p-hour").value),
+    month:       parseInt(document.getElementById("p-month").value)
+  };
+  try {
+    var r = await api("/predict", { method: "POST", body: JSON.stringify(body) });
+    var res = document.getElementById("predict-result");
+    res.classList.add("show");
+    document.getElementById("pred-value").textContent  = fmt(r.predicted_kwh) + " kWh";
+    document.getElementById("pred-bounds").textContent = "p10: " + fmt(r.lower_bound_kwh) + " kWh  |  p90: " + fmt(r.upper_bound_kwh) + " kWh";
+    var conf = Math.round((r.confidence || 0) * 100);
+    document.getElementById("pred-conf").textContent       = conf + "%";
+    document.getElementById("pred-conf-bar").style.width   = conf + "%";
+    document.getElementById("pred-conf-bar").style.background = conf > 70 ? "var(--green)" : conf > 40 ? "var(--accent)" : "var(--red)";
+    document.getElementById("pred-conf-label").textContent = "Model confidence: " + conf + "% | TFT quantile regression";
+  } catch(e) {
+    alert("Prediction failed: " + e.message);
+    console.error("predict error:", e);
+  }
+}
+
+// ── 7-Day Forecast ────────────────────────────────────────────────
+var sevenDayData = null;
+
+async function load7Day() {
+  var el = document.getElementById("sevenday-content");
+  el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px 0" class="pulse">Loading 7-day forecast from your dataset...</div>';
+  try {
+    var data = await api("/forecast/7day");
+    sevenDayData = data;
+    render7Day(data);
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);padding:12px">Error: ' + e.message + '</div>';
+    console.error("7day error:", e);
+  }
+}
+
+function render7Day(data) {
+  var el = document.getElementById("sevenday-content");
+  var maxKwh = Math.max.apply(null, data.forecast.map(function(d){ return d.predicted_kwh; }));
+
+  var cardsHTML = data.forecast.map(function(d, i) {
+    var pct = maxKwh > 0 ? Math.round((d.predicted_kwh / maxKwh) * 100) : 0;
+    return '<div class="day-card" onclick="show7DayDetail(' + i + ')" id="daycard-' + i + '">'
+      + '<div class="day-name">' + d.day + '</div>'
+      + '<div class="day-date">' + d.date.slice(5) + '</div>'
+      + '<div class="day-kwh">' + fmt(d.predicted_kwh, 2) + '</div>'
+      + '<div class="day-unit">kWh</div>'
+      + '<div class="day-meta">🌡 ' + fmt(d.avg_temp, 1) + '°C<br>☁ ' + fmt(d.cloud_estimate, 0) + '%</div>'
+      + '<div class="day-bar"><div class="day-bar-fill" style="width:' + pct + '%"></div></div>'
+      + '</div>';
+  }).join("");
+
+  el.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">'
+    + 'Based on <b style="color:var(--text)">' + data.based_on_days + ' days</b> of your sensor data'
+    + ' (' + data.data_range.from + ' → ' + data.data_range.to + ')'
+    + ' &nbsp;|&nbsp; Trend factor: <b style="color:var(--accent)">' + data.trend_factor + 'x</b>'
+    + '</div>'
+    + '<div class="day-cards">' + cardsHTML + '</div>'
+    + '<div class="sevenday-detail" id="sevenday-detail"></div>';
+}
+
+function show7DayDetail(idx) {
+  // Toggle active card
+  document.querySelectorAll(".day-card").forEach(function(c){ c.classList.remove("active"); });
+  var card = document.getElementById("daycard-" + idx);
+  if (card) card.classList.add("active");
+
+  if (!sevenDayData) return;
+  var d = sevenDayData.forecast[idx];
+  var detail = document.getElementById("sevenday-detail");
+
+  var hourlyHTML = d.hourly.map(function(h) {
+    return '<div class="forecast-hour">'
+      + '<div class="fh-time">' + String(h.hour).padStart(2,"0") + ':00</div>'
+      + '<div class="fh-val">' + fmt(h.predicted_kwh, 2) + '</div>'
+      + '<div class="fh-cloud">' + fmt(h.irradiance, 0) + ' W</div>'
+      + '</div>';
+  }).join("");
+
+  detail.innerHTML = '<div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text)">'
+    + d.day + ', ' + d.date + ' — Hourly Breakdown'
+    + '</div>'
+    + '<div class="sevenday-meta">'
+    + '<div>Avg Temp: <b>' + fmt(d.avg_temp,1) + '°C</b></div>'
+    + '<div>Cloud Est: <b>' + fmt(d.cloud_estimate,0) + '%</b></div>'
+    + '<div>Avg Irradiance: <b>' + fmt(d.avg_irradiance,0) + ' W/m²</b></div>'
+    + '<div>Total: <b style="color:var(--accent)">' + fmt(d.predicted_kwh,2) + ' kWh</b></div>'
+    + '</div>'
+    + '<div class="forecast-scroll">' + hourlyHTML + '</div>';
+  detail.classList.add("show");
+}
+
+
+async function simulateDay() {
+  try {
+    await api("/simulate");
+    await loadReadings();
+    await loadMetrics();
+  } catch(e) {
+    alert("Simulate failed: " + e.message);
+  }
+}
+
+// ── 7-Day Temperature Forecast ───────────────────────────────────
+var tempForecastData = null;
+var tempChart7 = null;
+
+async function loadTempForecast() {
+  var el = document.getElementById("temp7day-content");
+  el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px 0" class="pulse">Running TFT temperature forecast...</div>';
+  try {
+    var data = await api("/forecast/temperature");
+    tempForecastData = data;
+    renderTempForecast(data);
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);padding:12px">Error: ' + e.message + '</div>';
+    console.error("temp forecast error:", e);
+  }
+}
+
+function renderTempForecast(data) {
+  var el = document.getElementById("temp7day-content");
+  var tabsHTML = data.forecast.map(function(d, i) {
+    return '<div class="temp7-tab' + (i === 0 ? ' active' : '') + '" onclick="showTempDay(' + i + ')" id="t7tab-' + i + '">'
+      + '<div class="t7-dayname">' + d.day_name.slice(0,3) + '</div>'
+      + '<div class="t7-date">'   + d.date.slice(5) + '</div>'
+      + '<div class="t7-range">'  + d.temp_min + '° – ' + d.temp_max + '°C</div>'
+      + '<div class="t7-hum">💧 ' + d.hum_avg + '%</div>'
+      + '</div>';
+  }).join("");
+
+  el.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">'
+    + 'Calibrated from <b style="color:var(--text)">' + data.calibrated_from + '</b> sensor readings'
+    + ' &nbsp;|&nbsp; <b style="color:var(--blue)">' + data.model + '</b>'
+    + '</div>'
+    + '<div class="temp7-day-tabs">' + tabsHTML + '</div>'
+    + '<div class="temp7-detail" id="temp7-detail"></div>'
+    + '<div class="temp7-chart-wrap" style="margin-top:14px"><canvas id="temp7Chart" height="100"></canvas></div>';
+
+  showTempDay(0);
+  drawTemp7Chart(data.forecast);
+}
+
+function showTempDay(idx) {
+  document.querySelectorAll(".temp7-tab").forEach(function(t){ t.classList.remove("active"); });
+  var tab = document.getElementById("t7tab-" + idx);
+  if (tab) tab.classList.add("active");
+  if (!tempForecastData) return;
+  var d = tempForecastData.forecast[idx];
+  var detail = document.getElementById("temp7-detail");
+    var slotsHTML = d.readings.map(function(r) {
+    var col = r.temp_p50 > 33 ? "var(--red)" : r.temp_p50 > 30 ? "var(--accent)" : "var(--blue)";
+    return '<div class="temp7-slot">'
+      + '<div class="t7s-hour">' + String(r.hour).padStart(2,"0") + ':00</div>'
+      + '<div class="t7s-temp" style="color:' + col + '">' + r.temp_p50 + '°</div>'
+      + '<div style="font-size:9px;color:var(--muted)">' + r.temp_p10 + '–' + r.temp_p90 + '°</div>'
+      + '<div class="t7s-hum">💧' + r.hum_p50 + '%</div>'
+      + '</div>';
+  }).join("");
+  detail.innerHTML = '<div class="temp7-summary">'
+    + '<div>Min: <b>' + d.temp_min + '°C</b></div>'
+    + '<div>Max: <b>' + d.temp_max + '°C</b></div>'
+    + '<div>Avg: <b>' + d.temp_avg + '°C</b></div>'
+    + '<div>Humidity: <b>' + d.hum_avg + '%</b></div>'
+    + '</div>'
+    + '<div class="temp7-timeline">' + slotsHTML + '</div>';
+}
+
+function drawTemp7Chart(forecast) {
+  var labels = [], t_p50 = [], t_p10 = [], t_p90 = [], hums = [];
+  forecast.forEach(function(d) {
+    d.readings.forEach(function(r) {
+      labels.push(r.date.slice(5) + " " + String(r.hour).padStart(2,"0") + "h");
+      t_p50.push(r.temp_p50);
+      t_p10.push(r.temp_p10);
+      t_p90.push(r.temp_p90);
+      hums.push(r.hum_p50);
+    });
+  });
+  if (tempChart7) tempChart7.destroy();
+  var ctx = document.getElementById("temp7Chart");
+  if (!ctx) return;
+  tempChart7 = new Chart(ctx.getContext("2d"), {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [
+        { label: "Temp p90 (°C)", data: t_p90, borderColor: "rgba(79,195,247,0.2)", backgroundColor: "rgba(79,195,247,0.08)", fill: "+1", tension: 0.4, pointRadius: 0, yAxisID: "y" },
+        { label: "Temp p50 (°C)", data: t_p50, borderColor: "#4fc3f7", backgroundColor: "transparent", tension: 0.4, pointRadius: 0, borderWidth: 2, yAxisID: "y" },
+        { label: "Temp p10 (°C)", data: t_p10, borderColor: "rgba(79,195,247,0.2)", backgroundColor: "rgba(79,195,247,0.08)", fill: "-1", tension: 0.4, pointRadius: 0, yAxisID: "y" },
+        { label: "Humidity p50 (%)", data: hums, borderColor: "#66bb6a", backgroundColor: "transparent", borderDash: [4,3], tension: 0.4, pointRadius: 0, yAxisID: "y1" }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: "#7b88b5", boxWidth: 12, filter: function(item){ return item.text.indexOf('p10') === -1 && item.text.indexOf('p90') === -1; } } } },
+      scales: {
+        x:  { ticks: { color: "#7b88b5", maxTicksLimit: 14, maxRotation: 45 }, grid: { color: "#2a3055" } },
+        y:  { ticks: { color: "#4fc3f7" }, grid: { color: "#2a3055" }, position: "left",  title: { display: true, text: "°C", color: "#4fc3f7" } },
+        y1: { ticks: { color: "#66bb6a" }, grid: { drawOnChartArea: false }, position: "right", title: { display: true, text: "%", color: "#66bb6a" } }
+      }
+    }
+  });
+}
+
+// ── Auto-refresh every 60s ───────────────────────────────────────
+setInterval(function(){
+  if (isConnected) {
+    loadMetrics();
+    loadReadings();
+  }
+}, 60000);
+
+// ── Auto-connect on page load ────────────────────────────────────
+document.getElementById("p-month").value = new Date().getMonth() + 1;
+document.getElementById("p-hour").value  = new Date().getHours();
+window.addEventListener("load", function(){ connectAPI(); });
+</script>
+</body>
+</html>
